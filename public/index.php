@@ -1,57 +1,226 @@
 <?php
 /**
- * Set error reporting and display errors settings.  You will want to change these when in production.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
+ *
+ * @package    Fuel
+ * @version    1.9-dev
+ * @author     Fuel Development Team
+ * @license    MIT License
+ * @copyright  2010-2025 Fuel Development Team
+ * @link       https://fuelphp.com
  */
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Configure PHP Settings
+ * -----------------------------------------------------------------------------
+ */
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Show error reporting
+ * -----------------------------------------------------------------------------
+ *
+ *  Set error reporting and display errors settings.
+ *  You will want to change these when in production.
+ *
+ */
+
 error_reporting(-1);
+
 ini_set('display_errors', 1);
 
-// Use an anonymous function to keep the global namespace clean
-call_user_func(function() {
+/**
+ * -----------------------------------------------------------------------------
+ *  Define constants
+ * -----------------------------------------------------------------------------
+ */
 
-	/**
-	 * Set all the paths here
-	 */
-	$app_path		= '../fuel/app/';
-	$package_path	= '../fuel/packages/';
-	$core_path		= '../fuel/core/';
+/**
+ * -----------------------------------------------------------------------------
+ *  Website document root
+ * -----------------------------------------------------------------------------
+ */
 
+define('DOCROOT', __DIR__.DIRECTORY_SEPARATOR);
 
-	/**
-	 * Website docroot
-	 */
-	define('DOCROOT', __DIR__.DIRECTORY_SEPARATOR);
+/**
+ * -----------------------------------------------------------------------------
+ *  Path to the application directory
+ * -----------------------------------------------------------------------------
+ */
 
-	( ! is_dir($app_path) and is_dir(DOCROOT.$app_path)) and $app_path = DOCROOT.$app_path;
-	( ! is_dir($core_path) and is_dir(DOCROOT.$core_path)) and $core_path = DOCROOT.$core_path;
-	( ! is_dir($package_path) and is_dir(DOCROOT.$package_path)) and $package_path = DOCROOT.$package_path;
+define('APPPATH', realpath(__DIR__.'/../fuel/app/').DIRECTORY_SEPARATOR);
 
-	define('APPPATH', realpath($app_path).DIRECTORY_SEPARATOR);
-	define('PKGPATH', realpath($package_path).DIRECTORY_SEPARATOR);
-	define('COREPATH', realpath($core_path).DIRECTORY_SEPARATOR);
+/**
+ * -----------------------------------------------------------------------------
+ *  Path to the default packages directory
+ * -----------------------------------------------------------------------------
+ */
 
-});
+define('PKGPATH', realpath(__DIR__.'/../fuel/packages/').DIRECTORY_SEPARATOR);
 
-// Get the start time and memory for use later
+/**
+ * -----------------------------------------------------------------------------
+ *  The path to the framework core
+ * -----------------------------------------------------------------------------
+ */
+
+define('COREPATH', realpath(__DIR__.'/../fuel/core/').DIRECTORY_SEPARATOR);
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Profiling
+ * -----------------------------------------------------------------------------
+ */
+
 defined('FUEL_START_TIME') or define('FUEL_START_TIME', microtime(true));
 defined('FUEL_START_MEM') or define('FUEL_START_MEM', memory_get_usage());
 
-// Boot the app
-require_once APPPATH.'bootstrap.php';
+/**
+ * -----------------------------------------------------------------------------
+ *  Preparing the Application
+ * -----------------------------------------------------------------------------
+ */
 
-// Generate the request, execute it and send the output.
-$response = Request::factory()->execute()->response();
+/**
+ * -----------------------------------------------------------------------------
+ *  Check for dependencies
+ * -----------------------------------------------------------------------------
+ */
 
-// This will add the execution time and memory usage to the output.
-// Comment this out if you don't use it.
-$bm = Profiler::app_total();
-$response->body(str_replace(array('{exec_time}', '{mem_usage}'), array(round($bm[0], 4), round($bm[1] / pow(1024, 2), 3)), $response->body()));
+if ( ! file_exists(COREPATH.'classes'.DIRECTORY_SEPARATOR.'autoloader.php'))
+{
+	die('No composer autoloader found. Please run composer to install the FuelPHP framework dependencies first!');
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Activate autoloader class
+ * -----------------------------------------------------------------------------
+ */
+
+require COREPATH.'classes'.DIRECTORY_SEPARATOR.'autoloader.php';
+
+class_alias('Fuel\\Core\\Autoloader', 'Autoloader');
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Route processing
+ * -----------------------------------------------------------------------------
+ *
+ *  Exception route processing closure
+ *
+ */
+
+$routerequest = function($request = null, $e = false)
+{
+	Request::reset_request(true);
+
+	$route = array_key_exists($request, Router::$routes) ? Router::$routes[$request]->translation : Config::get('routes.'.$request);
+
+	if ($route instanceof Closure)
+	{
+		$response = $route();
+
+		if( ! $response instanceof Response)
+		{
+			$response = Response::forge($response);
+		}
+	}
+	elseif ($e === false)
+	{
+		$response = Request::forge()->execute()->response();
+	}
+	elseif ($route)
+	{
+		$response = Request::forge($route, false)->execute(array($e))->response();
+	}
+	elseif ($request)
+	{
+		$response = Request::forge($request)->execute(array($e))->response();
+	}
+	else
+	{
+		throw $e;
+	}
+
+	return $response;
+};
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Starting the Application
+ * -----------------------------------------------------------------------------
+ */
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Start the engine
+ * -----------------------------------------------------------------------------
+ *
+ *  Generate the request, execute it and send the output
+ *
+ */
+
+try
+{
+	// Boot the app...
+	require APPPATH.'bootstrap.php';
+
+	// ... and execute the main request
+	$response = $routerequest();
+}
+catch (HttpBadRequestException $e)
+{
+	$response = $routerequest('_400_', $e);
+}
+catch (HttpNoAccessException $e)
+{
+	$response = $routerequest('_403_', $e);
+}
+catch (HttpNotFoundException $e)
+{
+	$response = $routerequest('_404_', $e);
+}
+catch (HttpServerErrorException $e)
+{
+	$response = $routerequest('_500_', $e);
+}
+
+$response->body((string) $response);
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Start profiling
+ * -----------------------------------------------------------------------------
+ *
+ *  This will add the execution time and memory usage to the output.
+ *
+ *  Comment these out if you don't use it.
+ *
+ */
+
+if (strpos($response->body(), '{exec_time}') !== false or strpos($response->body(), '{mem_usage}') !== false)
+{
+	$bm = Profiler::app_total();
+
+	$response->body(
+		str_replace(
+			array('{exec_time}', '{mem_usage}'),
+			array(round($bm[0], 4), round($bm[1] / pow(1024, 2), 3)),
+			$response->body()
+		)
+	);
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ *  Show the web page
+ * -----------------------------------------------------------------------------
+ *
+ *  Send the output to the client
+ *
+ */
 
 $response->send(true);
-
-// Fire off the shutdown event
-Event::shutdown();
-
-// Make sure everything is flushed to the browser
-ob_end_flush();
-
-/* End of file index.php */

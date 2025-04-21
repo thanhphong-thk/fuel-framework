@@ -1,12 +1,42 @@
 <?php
+/**
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
+ *
+ * @package    Fuel
+ * @version    1.9-dev
+ * @author     Fuel Development Team
+ * @license    MIT License
+ * @copyright  2010-2025 Fuel Development Team
+ * @link       https://fuelphp.com
+ */
+
 return array(
-	'_root_'  => 'welcome/index',  // The default route
-	'_404_'   => 'welcome/404',    // The main 404 route
-	
 	/**
-	 * This is an example of a BASIC named route (used in reverse routing).
-	 * The translated route MUST come first, and the 'name' element must come
-	 * after it.
+	 * -------------------------------------------------------------------------
+	 *  Default route
+	 * -------------------------------------------------------------------------
+	 *
 	 */
-	// 'foo/bar' => array('welcome/foo', 'name' => 'foo'),
+
+	'_root_' => 'welcome/index',
+
+	/**
+	 * -------------------------------------------------------------------------
+	 *  Page not found
+	 * -------------------------------------------------------------------------
+	 *
+	 */
+
+	'_404_' => 'welcome/404',
+
+	/**
+	 * -------------------------------------------------------------------------
+	 *  Example for Presenter
+	 * -------------------------------------------------------------------------
+	 *
+	 *  A route for showing page using Presenter
+	 *
+	 */
+
+	'hello(/:name)?' => array('welcome/hello', 'name' => 'hello'),
 );
